@@ -1,46 +1,63 @@
 package refresh
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/chromedp"
+	"github.com/tebeka/selenium"
 )
 
 func Refresh() string {
-	// Create a new context
-	ctx, cancel := chromedp.NewContext(context.Background())
-	defer cancel()
+	// Укажите путь к ChromeDriver
+	service, err := selenium.NewChromeDriverService("/usr/local/bin/chromedriver", 4444)
+	if err != nil {
+		log.Fatalf("Failed to start ChromeDriver: %v", err)
+	}
+	defer service.Stop()
 
-	// Run chromedp tasks
-	var cookies []*network.Cookie
-	err := chromedp.Run(ctx,
-		network.Enable(), // Enable network events
-		chromedp.Navigate(`https://www.ozon.ru/category/smartfony-15502/apple-26303000`), // Navigate to the site
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			// Get all cookies
-			cookies, err = network.GetCookies().Do(ctx)
-			return err
-		}),
-	)
+	// Настройка capabilities для Chrome
+	caps := selenium.Capabilities{
+		"browserName": "chrome",
+		"chromeOptions": map[string]interface{}{
+			"args": []string{
+				"--headless", // Запуск в headless-режиме (без графического интерфейса)
+				"--disable-gpu",
+				"--no-sandbox",
+				"--disable-dev-shm-usage",
+			},
+		},
+	}
+
+	// Подключение к WebDriver
+	wd, err := selenium.NewRemote(caps, "http://localhost:4444/wd/hub")
+	if err != nil {
+		log.Fatalf("Failed to connect to WebDriver: %v", err)
+	}
+	defer wd.Quit()
+
+	// Переход на страницу
+	err = wd.Get("https://www.ozon.ru/category/smartfony-15502/apple-26303000")
+	if err != nil {
+		log.Fatalf("Failed to navigate to the URL: %v", err)
+	}
+
+	// Ожидание загрузки страницы
+	time.Sleep(10 * time.Second)
+
+	// Получение куки
+	cookies, err := wd.GetCookies()
 	if err != nil {
 		log.Fatalf("Failed to get cookies: %v", err)
 	}
 
-	// Concatenate cookies into a single line
+	// Форматирование куки в строку
 	var cookieStrings []string
 	for _, cookie := range cookies {
 		cookieStrings = append(cookieStrings, fmt.Sprintf("%s=%s", cookie.Name, cookie.Value))
 	}
-
-	// Join the cookie strings with "; "
 	cookieLine := strings.Join(cookieStrings, "; ")
 
 	return cookieLine
 }
-
-//__Secure-ETC=40180dd7d5c12a19d63576f4098de0ec; abt_data=7.LuvL6li2VahdT_6bzL35euwg7uiGGSdoaex19X90yDv9MLRbMAkOHmI8g03-qrnii1x81IiljlD6r34loxrAHjTcdL7dWM3sKiTcMQ9wXpiFyrOhGa5mzCY2Zlmok_ymyRUH0zOz2-sev6bDKytpXrijQDOR4GNxQXvRkqcLlBj1iKQsmadKPJ6yueSb4Yl7RGYxiTAqKkxPmHAorP_HtREa0jEkio3umOwqsGkRWJj4vWWGRRIa5CKepEwRYQ4y6s7NK4AyAUQ80xiChPRWp0Ubcv2BvZCN4kGumoBrNeFTO2P4D9oug5z-sOXBLe-u-gisB1NQO0odN-MgWgnsnqERTs6a3722D7u38tgiqFjAiiBmRLV-1YwxhoAYCZ5kz5rs4Iz2FaRMkY-NI4IkiY-zuZ3KsPqflEcrCvBazQYmz3HNMReQRcGJYI1qX7uZT5U-i_DDfvmYRrxSmpJZMOsZQ5A0RBeNWt7GujDQl58l5D4RD8LDRFh-T149GGkoVDZadXWtubAEcCXzgc0; __Secure-user-id=0; __Secure-access-token=6.0.uuyFJ5B_S7mmzWUKbBnSqA.50.AXtpKZ0QqHvDyDz6j5I9sUPqjcAMTASfoctJ7-WQ6jSBTwRjS-F-GYp7F6vetmaycA..20250114173115.gr5Xj1GAKdtkwMQG_pQG92v1Q2mC47qLUQeaqRfxvOg.1f998aca7ab9fc37b; __Secure-refresh-token=6.0.uuyFJ5B_S7mmzWUKbBnSqA.50.AXtpKZ0QqHvDyDz6j5I9sUPqjcAMTASfoctJ7-WQ6jSBTwRjS-F-GYp7F6vetmaycA..20250114173115.6lxzffgO0p1sQIPSNpW8ACAFCJpkeMqAA3hzfC0ljok.1ecd3f5d1eabc8c86; __Secure-ab-group=50; __Secure-ext_xcid=0182cd12f5c53d42b9a6df8719c7cc80; is_cookies_accepted=1; TS0149423d=0187c00a18153d85ad05bec0cb9dc9d263351e8a5d7361e60c585c36453527ff7b905244ee086c456c153d8e4f4fb35477ea0e380b; TS0121feed=0187c00a18541f8aded0de9178ce7c6000c647d143c51c55bd8209c4185580a5e6ab7b13a0cec79c01c2de354077b74d2dcc95d2bb; xcid=0182cd12f5c53d42b9a6df8719c7cc80; guest=true; TS018529d3=0187c00a183a7a7462abc544e8e40a1da0c866e839cce0c9862db2db37fb6bdb26b061f67845f0ab215c2c99f11ea65b748183dd17; rfuid=LTE5NTAyNjU0NzAsMzUuNzQ5OTcyMDkzODUwMzc0LDEzNzAwNjM5MTUsV2luZG93cyBOVCAxMC4wOyBXaW42NDsgeDY0LC01MzI1MjE2NTksVzNzaWJtRnRaU0k2SWxCRVJpQldhV1YzWlhJaUxDSmtaWE5qY21sd2RHbHZiaUk2SWxCdmNuUmhZbXhsSUVSdlkzVnRaVzUwSUVadmNtMWhkQ0lzSW0xcGJXVlVlWEJsY3lJNlczc2lkSGx3WlNJNkltRndjR3hwWTJGMGFXOXVMM0JrWmlJc0luTjFabVpwZUdWeklqb2ljR1JtSW4wc2V5SjBlWEJsSWpvaWRHVjRkQzl3WkdZaUxDSnpkV1ptYVhobGN5STZJbkJrWmlKOVhYMHNleUp1WVcxbElqb2lRMmh5YjIxbElGQkVSaUJXYVdWM1pYSWlMQ0prWlhOamNtbHdkR2x2YmlJNklsQnZjblJoWW14bElFUnZZM1Z0Wlc1MElFWnZjbTFoZENJc0ltMXBiV1ZVZVhCbGN5STZXM3NpZEhsd1pTSTZJbUZ3Y0d4cFkyRjBhVzl1TDNCa1ppSXNJbk4xWm1acGVHVnpJam9pY0dSbUluMHNleUowZVhCbElqb2lkR1Y0ZEM5d1pHWWlMQ0p6ZFdabWFYaGxjeUk2SW5Ca1ppSjlYWDBzZXlKdVlXMWxJam9pUTJoeWIyMXBkVzBnVUVSR0lGWnBaWGRsY2lJc0ltUmxjMk55YVhCMGFXOXVJam9pVUc5eWRHRmliR1VnUkc5amRXMWxiblFnUm05eWJXRjBJaXdpYldsdFpWUjVjR1Z6SWpwYmV5SjBlWEJsSWpvaVlYQndiR2xqWVhScGIyNHZjR1JtSWl3aWMzVm1abWw0WlhNaU9pSndaR1lpZlN4N0luUjVjR1VpT2lKMFpYaDBMM0JrWmlJc0luTjFabVpwZUdWeklqb2ljR1JtSW4xZGZTeDdJbTVoYldVaU9pSk5hV055YjNOdlpuUWdSV1JuWlNCUVJFWWdWbWxsZDJWeUlpd2laR1Z6WTNKcGNIUnBiMjRpT2lKUWIzSjBZV0pzWlNCRWIyTjFiV1Z1ZENCR2IzSnRZWFFpTENKdGFXMWxWSGx3WlhNaU9sdDdJblI1Y0dVaU9pSmhjSEJzYVdOaGRHbHZiaTl3WkdZaUxDSnpkV1ptYVhobGN5STZJbkJrWmlKOUxIc2lkSGx3WlNJNkluUmxlSFF2Y0dSbUlpd2ljM1ZtWm1sNFpYTWlPaUp3WkdZaWZWMTlMSHNpYm1GdFpTSTZJbGRsWWt0cGRDQmlkV2xzZEMxcGJpQlFSRVlpTENKa1pYTmpjbWx3ZEdsdmJpSTZJbEJ2Y25SaFlteGxJRVJ2WTNWdFpXNTBJRVp2Y20xaGRDSXNJbTFwYldWVWVYQmxjeUk2VzNzaWRIbHdaU0k2SW1Gd2NHeHBZMkYwYVc5dUwzQmtaaUlzSW5OMVptWnBlR1Z6SWpvaWNHUm1JbjBzZXlKMGVYQmxJam9pZEdWNGRDOXdaR1lpTENKemRXWm1hWGhsY3lJNkluQmtaaUo5WFgxZCxXeUp5ZFMxU1ZTSXNJbkoxTFZKVklpd2ljblVpTENKbGJpMVZVeUlzSW1WdUlsMD0sMCwxLDAsMjQsMjM3NDE1OTMwLC0xLDIyNzEyNjUyMCwwLDEsMCwtNDkxMjc1NTIzLElFNWxkSE5qWVhCbElFZGxZMnR2SUZkcGJqTXlJRFV1TUNBb1YybHVaRzkzY3lrZ01qQXhNREF4TURFZ1RXOTZhV3hzWVE9PSxlMzA9LDY1LC0xMjg1NTUxMywxLDEsLTEsMTY5OTk1NDg4NywxNjk5OTU0ODg3LDMzNjAwNzkzMywxNg==
